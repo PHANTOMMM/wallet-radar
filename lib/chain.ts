@@ -114,7 +114,7 @@ export async function getLiveWallet(key: string, chain: Chain, addressRaw: strin
   const metas = await Promise.all(priced.map((b) => rpc(chain, key, "alchemy_getTokenMetadata", [b.contractAddress]).catch(() => null)));
   const holdings: Holding[] = [];
   const ethAmt = Number(BigInt(ethHex)) / 1e18;
-  if (ethAmt * eth >= 0.01) holdings.push({ symbol: chain.native, name: chain.native === "POL" ? "POL (Polygon)" : "Ether", amount: ethAmt, price: eth, value: ethAmt * eth, change24h: null });
+  if (ethAmt * eth >= 0.01) holdings.push({ symbol: chain.native, name: chain.native === "POL" ? "POL (Polygon)" : chain.native === "BNB" ? "BNB" : "Ether", amount: ethAmt, price: eth, value: ethAmt * eth, change24h: null });
   priced.forEach((b, i) => {
     const m = metas[i]; if (!m || m.decimals == null) return;
     const price = prices.get(b.contractAddress.toLowerCase())!;

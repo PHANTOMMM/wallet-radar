@@ -7,7 +7,7 @@ Paste a public wallet address and understand it in seconds: overview, an explain
 ![Wallet Radar on desktop](shots/live_desktop.png)
 
 ## Chains
-Ethereum, Base, Arbitrum, Optimism and Polygon. They share the same 0x address format and one Alchemy key. To add a chain, add it in `lib/chains.ts` and enable it in the Alchemy dashboard.
+Ethereum, Base, Arbitrum, Optimism, Polygon and BNB Chain. They share the same 0x address format and one Alchemy key. To add a chain, add it in `lib/chains.ts` and enable it in the Alchemy dashboard.
 
 ## How it works
 - `app/api/wallet/route.ts`: server route that holds the API key, caches for 60 s and never echoes upstream errors.
@@ -29,7 +29,7 @@ The Activity Score describes behaviour using visible signals. It does not say a 
 ## Known limits
 - Only a few well-known Ethereum addresses carry names; other chains show shortened addresses.
 - 24h price change is not shown for live data.
-- Solana and Bitcoin are not supported yet.
+- Solana and Bitcoin are not supported yet; BNB Chain is supported but only its first 300 transfers each way are read.
 
 ## Licence
 MIT
