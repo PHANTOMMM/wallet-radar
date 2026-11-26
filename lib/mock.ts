@@ -3,16 +3,16 @@
 
 export type TxKind = "in" | "out" | "swap" | "contract";
 
-export type Holding = { symbol: string; name: string; amount: number; price: number; value: number; change24h: number | null };
+export type Holding = { contract?: string; symbol: string; name: string; amount: number; price: number; value: number; change24h: number | null };
 export type Counterparty = { id: string; address: string; label: string; type: "exchange" | "contract" | "wallet"; };
 export type Tx = {
-  id: string; hash: string; kind: TxKind; ts: number; symbol: string; amount: number; usd: number;
+  id: string; hash: string; token?: string; kind: TxKind; ts: number; symbol: string; amount: number; usd: number;
   counterparty: Counterparty; note?: string;
 };
 export type Wallet = {
   address: string; network: string; balance: number; holdings: Holding[];
   txs: Tx[]; txCount: number; firstSeen: number;
-  live?: boolean; truncated?: boolean;
+  live?: boolean; truncated?: boolean; asOf: number; hiddenTokens?: number;
 };
 
 export const NOW = () => Date.now();
@@ -89,7 +89,7 @@ export function getWallet(addressRaw: string): Wallet {
   txs.sort((a, b) => b.ts - a.ts);
 
   return {
-    address, network: "Ethereum", holdings, txs,
+    address, network: "Ethereum", asOf: now, holdings, txs,
     balance: holdings.reduce((s, h) => s + h.value, 0),
     txCount: Math.round(total * (6 + r() * 14)),
     firstSeen: now - (200 + r() * 1800) * D,
@@ -100,7 +100,7 @@ export type Window = "24h" | "7d" | "30d";
 export const WINDOW_MS: Record<Window, number> = { "24h": D, "7d": 7 * D, "30d": 30 * D };
 
 export function inWindow(w: Wallet, win: Window) {
-  const cut = NOW() - WINDOW_MS[win];
+  const cut = w.asOf - WINDOW_MS[win];
   return w.txs.filter((t) => t.ts >= cut);
 }
 
@@ -126,7 +126,7 @@ export function activity(w: Wallet, win: Window): Activity {
   const mv = Math.min(25, (f.incoming + f.outgoing) / Math.max(1, w.balance) * 25);
   const score = Math.round(freq + cx + mv);
   const level = score >= 60 ? "High" : score >= 30 ? "Moderate" : "Quiet";
-  const last = txs[0] ? Math.max(1, Math.round((NOW() - txs[0].ts) / 60000)) : null;
+  const last = txs[0] ? Math.max(1, Math.round((w.asOf - txs[0].ts) / 60000)) : null;
   return {
     score, level,
     headline: `${level} activity: ${txs.length} transaction${txs.length === 1 ? "" : "s"} in the last ${win}.`,
@@ -157,8 +157,8 @@ export const usd = (n: number) => {
   const s = a >= 1e6 ? `${(a / 1e6).toFixed(2)}M` : a >= 1e4 ? a.toLocaleString("en-US", { maximumFractionDigits: 0 }) : a.toLocaleString("en-US", { maximumFractionDigits: a < 1 ? 4 : 2, minimumFractionDigits: a < 1 ? 4 : 2 });
   return `${n < 0 ? "-" : ""}$${s}`;
 };
-export const ago = (ts: number) => {
-  const m = Math.round((NOW() - ts) / 60000);
+export const ago = (ts: number, now: number) => {
+  const m = Math.round((now - ts) / 60000);
   return m < 60 ? `${Math.max(1, m)}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
 };
 
@@ -167,3 +167,6 @@ export const SAMPLE_ADDRESSES = [
   "0xde0b295669a9fd93d5f28d9ec85e40f4cb697bae",
   "0x28c6c06298d514db089934071355e5743bf21d60",
 ];
+
+/** Deterministic UTC time, safe to render on server and client without hydration drift. */
+export const fmtTime = (ts: number) => new Date(ts).toISOString().replace("T", " ").slice(0, 16) + " UTC";

@@ -4,16 +4,26 @@ Paste a public wallet address and understand it in seconds: overview, an explain
 
 **Live:** https://wallet-radar-wine.vercel.app
 
-![Wallet Radar on desktop](shots/live_desktop.png)
+![Wallet overview](shots/v2_desktop_wallet.png)
 
 ## Chains
 Ethereum, Base, Arbitrum, Optimism, Polygon and BNB Chain. They share the same 0x address format and one Alchemy key. To add a chain, add it in `lib/chains.ts` and enable it in the Alchemy dashboard.
 
+## Pages
+- `/` search, samples, recent wallets
+- `/wallet/<chain>/<address>` overview, then `/transactions`, `/flow`, `/assets`
+- `/tx/<chain>/<hash>` transaction detail
+- `/token/<chain>/<address>` token detail
+- `/watchlist` saved wallets with live balances (stored on the device only)
+
+Window, filters, search and paging live in the URL, so every view is a shareable link with its own preview card.
+
 ## How it works
-- `app/api/wallet/route.ts`: server route that holds the API key, caches for 60 s and never echoes upstream errors.
-- `lib/chain.ts`: live data from Alchemy (balances, token holdings, transfers, prices). Unpriced tokens are dropped as airdrop spam. Reads at most 300 transfers each way per wallet.
-- `lib/mock.ts`: deterministic mock wallets and the shared types. The Live/Mock badge switches between them.
-- `components/Radar.tsx`: the whole UI. The watchlist is stored on the device only.
+- `lib/chain.ts`: live data from Alchemy (balances, holdings, transfers, prices, transaction receipts, token metadata). Unpriced tokens are dropped as airdrop spam. Transfers are read 300 per page, up to 4 pages ("Load older activity").
+- `lib/server.ts`: server-only loaders with short caches. Upstream errors are never echoed (URLs contain the key).
+- `app/api/{wallet,tx,token}`: JSON routes used by the watchlist and by tests.
+- `lib/mock.ts`: shared types and a deterministic mock generator.
+- `components/Panels.tsx`: shared server-rendered panels.
 
 ## Run it
 ```
@@ -29,6 +39,7 @@ The Activity Score describes behaviour using visible signals. It does not say a 
 ## Known limits
 - Only a few well-known Ethereum addresses carry names; other chains show shortened addresses.
 - 24h price change is not shown for live data.
+- Wallet history is read back at most 4 pages (about 1,200 transfers each way); the page says so when a wallet is busier than that.
 - Solana and Bitcoin are not supported yet; BNB Chain is supported but only its first 300 transfers each way are read.
 
 ## Licence
