@@ -5,7 +5,7 @@ export function ErrorBox({ title, message, hint }: { title: string; message: str
       <h1 className="text-lg font-medium">{title}</h1>
       <p className="mt-2 text-sm text-mute">{message}</p>
       {hint && <p className="mt-2 text-xs text-faint">{hint}</p>}
-      <Link href="/" className="mt-5 inline-block rounded-md border border-line px-3 py-1.5 text-sm text-mute hover:text-ink">Back to search</Link>
+      <Link href="/scan" className="mt-5 inline-block rounded-md border border-line px-3 py-1.5 text-sm text-mute hover:text-ink">Scan another</Link>
     </div>
   );
 }

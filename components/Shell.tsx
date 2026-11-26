@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { CHAINS, type ChainId } from "@/lib/chains";
 import { walletHref } from "@/lib/links";
@@ -41,6 +41,9 @@ export function SearchBox({ initialChain = "ethereum", compact = false }: { init
 }
 
 export function SiteHeader() {
+  const path = usePathname();
+  const landing = path === "/";
+  const scanning = path === "/scan";
   return (
     <header className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-6 sm:px-6">
       <div className="flex items-center justify-between sm:justify-start sm:gap-8">
@@ -48,9 +51,13 @@ export function SiteHeader() {
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden><circle cx="10" cy="10" r="8.5" stroke="var(--color-faint)" /><circle cx="10" cy="10" r="4.5" stroke="var(--color-faint)" /><circle cx="10" cy="10" r="1.6" fill="var(--color-accent)" /></svg>
           <span className="text-sm font-medium tracking-tight">Wallet Radar</span>
         </Link>
-        <Link href="/watchlist" className="text-sm text-mute hover:text-ink">Watchlist</Link>
+        <nav className="flex items-center gap-5 text-sm" aria-label="Main">
+          {!scanning && <Link href="/scan" className="text-mute hover:text-ink">Scan</Link>}
+          <Link href="/watchlist" className="text-mute hover:text-ink">Watchlist</Link>
+        </nav>
       </div>
-      <div className="sm:ml-auto sm:max-w-xl sm:flex-1"><SearchBox compact /></div>
+      {!landing && !scanning && <div className="sm:ml-auto sm:max-w-xl sm:flex-1"><SearchBox compact /></div>}
+      {landing && <Link href="/scan" className="hidden rounded-md bg-ink px-4 py-1.5 text-sm font-medium text-bg hover:bg-white sm:ml-auto sm:block">Scan a wallet</Link>}
     </header>
   );
 }

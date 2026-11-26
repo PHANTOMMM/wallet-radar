@@ -12,7 +12,7 @@ export type Tx = {
 export type Wallet = {
   address: string; network: string; balance: number; holdings: Holding[];
   txs: Tx[]; txCount: number; firstSeen: number;
-  live?: boolean; truncated?: boolean; asOf: number; hiddenTokens?: number;
+  live?: boolean; truncated?: boolean; asOf: number; hiddenTokens?: number; pricesPartial?: boolean;
 };
 
 export const NOW = () => Date.now();

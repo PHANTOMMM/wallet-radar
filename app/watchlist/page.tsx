@@ -36,7 +36,7 @@ export default function WatchlistPage() {
     <main className="mt-2">
       <Panel title="Watchlist" right={<span className="num text-xs text-faint">{ready ? list.length : "·"}</span>}>
         {!ready ? <p className="text-sm text-mute">Loading…</p> : list.length === 0 ? (
-          <div className="py-6 text-center"><p className="text-sm text-mute">Nothing saved yet.</p><p className="mt-1 text-xs text-faint">Open any wallet and tap Save. Your list stays on this device only.</p><Link href="/" className="mt-4 inline-block rounded-md border border-line px-3 py-1.5 text-sm text-mute hover:text-ink">Find a wallet</Link></div>
+          <div className="py-6 text-center"><p className="text-sm text-mute">Nothing saved yet.</p><p className="mt-1 text-xs text-faint">Open any wallet and tap Save. Your list stays on this device only.</p><Link href="/scan" className="mt-4 inline-block rounded-md border border-line px-3 py-1.5 text-sm text-mute hover:text-ink">Find a wallet</Link></div>
         ) : (
           <ul className="divide-y divide-line">
             {list.map((s) => {

@@ -53,6 +53,7 @@ export default async function WalletLayout({ children, params }: { children: Rea
           <TabLink key={l} href={base(t)} label={l} />
         ))}
       </nav>
+      {w.pricesPartial && <p role="status" className="rounded-md border border-out/40 bg-surface px-3 py-2 text-xs text-out">Some token prices could not be loaded right now, so the totals below may be too low. Refresh in a minute.</p>}
       {w.truncated && <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-mute">This wallet is very busy. Part of the older activity in this window may be missing. Open Transactions and use “Load more” to read further back.</p>}
       <VisitTracker chain={chain.id} address={address} balance={w.balance} asOf={w.asOf} />
       {children}

@@ -28,6 +28,7 @@ function wrap(chain: Chain, e: unknown): never {
   const m = (e as Error).message;
   if (m === "NOT_ENABLED") throw new AppError(503, `${chain.name} is not switched on for this API key yet`);
   if (m === "NOT_FOUND") throw new AppError(404, "Not found on this network");
+  if (e instanceof Error && e.name === "PriceError" || e instanceof Error && /price/i.test(e.message)) throw new AppError(503, "Price data is temporarily unavailable, so values cannot be shown. Try again in a minute.");
   throw new AppError(502, "Could not load this right now"); // never echo upstream errors: they can contain the key
 }
 

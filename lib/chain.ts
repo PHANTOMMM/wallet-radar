@@ -43,26 +43,58 @@ async function rpc(chain: Chain, key: string, method: string, params: unknown[])
   return j.result;
 }
 
-async function nativePrice(key: string, symbol: string): Promise<number> {
-  const r = await fetch(`https://api.g.alchemy.com/prices/v1/${key}/tokens/by-symbol?symbols=${symbol}`, { signal: AbortSignal.timeout(15000) });
-  const j = await r.json();
-  return Number(j?.data?.[0]?.prices?.[0]?.value) || 0;
+// ---------- prices ----------
+// DeFiLlama is the primary source (free, no key, no tight quota). Alchemy prices are the fallback.
+// A silent failure here once turned every wallet into "$0", so price lookups report failure loudly.
+export class PriceError extends Error { name = "PriceError"; }
+async function getJson(url: string, init?: RequestInit) {
+  const r = await fetch(url, { ...init, signal: AbortSignal.timeout(12000) });
+  if (!r.ok) throw new PriceError(`price source ${r.status}`);
+  return r.json();
 }
 
-/** USD price per contract address; unpriced contracts are simply absent (also acts as a spam filter). */
-async function priceContracts(key: string, network: string, addrs: string[], into: Map<string, number>) {
+async function nativePrice(key: string, chain: Chain): Promise<number> {
+  try {
+    const j = await getJson(`https://coins.llama.fi/prices/current/${chain.llamaNative}`);
+    const p = Number(j?.coins?.[chain.llamaNative]?.price);
+    if (p > 0) return p;
+  } catch { /* fall through */ }
+  try {
+    const j = await getJson(`https://api.g.alchemy.com/prices/v1/${key}/tokens/by-symbol?symbols=${chain.priceSymbol}`);
+    const p = Number(j?.data?.[0]?.prices?.[0]?.value);
+    if (p > 0) return p;
+  } catch { /* fall through */ }
+  throw new PriceError("native price unavailable");
+}
+
+/** USD price per contract address. Unpriced contracts are simply absent (which also filters spam).
+ *  Returns false when a price source FAILED (as opposed to merely not knowing a token). */
+async function priceContracts(key: string, chain: Chain, addrs: string[], into: Map<string, number>): Promise<boolean> {
   const todo = [...new Set(addrs)].filter((a) => !into.has(a));
+  let healthy = true;
   const chunks: string[][] = [];
-  for (let i = 0; i < todo.length; i += 25) chunks.push(todo.slice(i, i + 25));
+  for (let i = 0; i < todo.length; i += 90) chunks.push(todo.slice(i, i + 90));
   await Promise.all(chunks.map(async (c) => {
+    let llamaOk = false;
     try {
-      const j = await post(`https://api.g.alchemy.com/prices/v1/${key}/tokens/by-address`, { addresses: c.map((address) => ({ network, address })) });
-      for (const row of j?.data ?? []) {
-        const v = Number(row?.prices?.[0]?.value);
-        if (v > 0) into.set(String(row.address).toLowerCase(), v);
+      const j = await getJson(`https://coins.llama.fi/prices/current/${c.map((a) => `${chain.llama}:${a}`).join(",")}`);
+      llamaOk = true;
+      for (const [k, v] of Object.entries(j?.coins ?? {})) {
+        const price = Number((v as { price?: number }).price);
+        if (price > 0) into.set(k.split(":")[1].toLowerCase(), price);
       }
-    } catch { /* leave unpriced */ }
+    } catch { /* try Alchemy */ }
+    const left = c.filter((a) => !into.has(a));
+    if (left.length === 0) return;
+    // Alchemy fallback only for tokens Llama did not know (or all of them if Llama failed); capped to protect the quota.
+    const fb = left.slice(0, llamaOk ? 10 : 25);
+    try {
+      const j = await post(`https://api.g.alchemy.com/prices/v1/${key}/tokens/by-address`, { addresses: fb.map((address) => ({ network: chain.priceNetwork, address })) });
+      if (j?.error) throw new PriceError("alchemy price error");
+      for (const row of j?.data ?? []) { const v = Number(row?.prices?.[0]?.value); if (v > 0) into.set(String(row.address).toLowerCase(), v); }
+    } catch { if (!llamaOk) healthy = false; }
   }));
+  return healthy;
 }
 
 type Transfer = {
@@ -105,7 +137,7 @@ export async function getLiveWallet(key: string, chain: Chain, addressRaw: strin
   const [ethHex, nonceHex, eth, tb, outR, inR] = await Promise.all([
     rpc(chain, key, "eth_getBalance", [addr, "latest"]),
     rpc(chain, key, "eth_getTransactionCount", [addr, "latest"]),
-    nativePrice(key, chain.priceSymbol),
+    nativePrice(key, chain),
     rpc(chain, key, "alchemy_getTokenBalances", [addr, "erc20"]),
     transfers(chain, key, addr, "fromAddress", since, depth),
     transfers(chain, key, addr, "toAddress", since, depth),
@@ -123,7 +155,7 @@ export async function getLiveWallet(key: string, chain: Chain, addressRaw: strin
   balances = balances.filter((b) => { try { return BigInt(b.tokenBalance) > 0n && !NATIVE_ALIAS.has(b.contractAddress.toLowerCase()); } catch { return false; } });
 
   const transferContracts = [...outT, ...inT].filter((t) => t.category === "erc20" && t.rawContract.address).map((t) => t.rawContract.address!.toLowerCase());
-  await priceContracts(key, chain.priceNetwork, [...balances.map((b) => b.contractAddress.toLowerCase()), ...transferContracts], prices);
+  const pricesOk = await priceContracts(key, chain, [...balances.map((b) => b.contractAddress.toLowerCase()), ...transferContracts], prices);
 
   const priced = balances.filter((b) => prices.has(b.contractAddress.toLowerCase())).slice(0, 40);
   const metas = await Promise.all(priced.map((b) => rpc(chain, key, "alchemy_getTokenMetadata", [b.contractAddress]).catch(() => null)));
@@ -187,7 +219,7 @@ export async function getLiveWallet(key: string, chain: Chain, addressRaw: strin
     balance: holdings.reduce((s, h) => s + h.value, 0),
     txCount: parseInt(nonceHex, 16),
     firstSeen: txs.length ? txs[txs.length - 1].ts : now,
-    live: true, truncated, asOf: now, hiddenTokens: balances.length - priced.length,
+    live: true, truncated, asOf: now, hiddenTokens: balances.length - priced.length, pricesPartial: !pricesOk,
   };
 }
 
@@ -202,7 +234,7 @@ export type TxDetail = {
 export async function getTxDetail(key: string, chain: Chain, hash: string): Promise<TxDetail> {
   const [tx, rc] = await Promise.all([rpc(chain, key, "eth_getTransactionByHash", [hash]), rpc(chain, key, "eth_getTransactionReceipt", [hash])]);
   if (!tx) throw new Error("NOT_FOUND");
-  const px = await nativePrice(key, chain.priceSymbol);
+  const px = await nativePrice(key, chain).catch(() => 0);
   let ts: number | null = null;
   try { const b = await rpc(chain, key, "eth_getBlockByNumber", [tx.blockNumber, false]); ts = parseInt(b.timestamp, 16) * 1000; } catch { /* pending */ }
   const gasUsed = rc ? parseInt(rc.gasUsed, 16) : null;
@@ -234,7 +266,7 @@ export async function getTxDetail(key: string, chain: Chain, hash: string): Prom
 export type TokenInfo = { address: string; chain: string; symbol: string; name: string; decimals: number | null; price: number | null; logo: string | null };
 export async function getTokenInfo(key: string, chain: Chain, address: string): Promise<TokenInfo> {
   const a = address.toLowerCase();
-  const [m, pr] = await Promise.all([rpc(chain, key, "alchemy_getTokenMetadata", [a]), (async () => { const m2 = new Map<string, number>(); await priceContracts(key, chain.priceNetwork, [a], m2); return m2.get(a) ?? null; })()]);
+  const [m, pr] = await Promise.all([rpc(chain, key, "alchemy_getTokenMetadata", [a]), (async () => { const m2 = new Map<string, number>(); await priceContracts(key, chain, [a], m2); return m2.get(a) ?? null; })()]);
   if (!m || (!m.symbol && !m.name) || m.decimals == null) throw new Error("NOT_FOUND");
   return { address: a, chain: chain.id, symbol: m.symbol ?? "?", name: m.name ?? "Unknown token", decimals: m.decimals ?? null, price: pr, logo: m.logo ?? null };
 }
